@@ -11,6 +11,8 @@ jobs:
     steps:
       - name: Checkout Workflow Repo
         uses: actions/checkout@v3
+        with:
+          path: hostrepo  # avoid conflict with 'kernel' directory
 
       - name: Clone Kernel Source
         run: |
