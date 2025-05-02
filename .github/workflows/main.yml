@@ -9,12 +9,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Kernel Source
+      - name: Checkout Workflow Repo
         uses: actions/checkout@v3
-        with:
-          repository: lineage_kernel_nothing_sm7325
-          ref: lineage-22.2
-          path: kernel
+
+      - name: Clone Kernel Source
+        run: |
+          git clone --depth=1 -b lineage-22.2 https://github.com/LineageOS/android_kernel_nothing_sm7325 kernel
 
       - name: Install Dependencies
         run: |
