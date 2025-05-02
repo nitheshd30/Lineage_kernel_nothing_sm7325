@@ -1,0 +1,57 @@
+name: Kernel Builder
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+    - name: Checkout kernel source
+      uses: actions/checkout@v4
+      with:
+        repository: lineage_kernel_nothing_sm7325
+        ref: lineage-22.2
+        path: kernel
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bc bison build-essential ccache flex git libncurses-dev libssl-dev lzop make python3
+
+    - name: Setup Proton Clang
+      run: |
+        git clone --depth=1 https://github.com/kdrag0n/proton-clang.git proton-clang
+        echo "PROTON_CLANG=$(pwd)/proton-clang" >> $GITHUB_ENV
+        echo "PATH=$(pwd)/proton-clang/bin:$PATH" >> $GITHUB_ENV
+
+    - name: Build kernel
+      working-directory: kernel
+      run: |
+        export ARCH=arm64
+        export SUBARCH=arm64
+        export CC=clang
+        export CLANG_TRIPLE=aarch64-linux-gnu-
+        export CROSS_COMPILE=aarch64-linux-gnu-
+        
+        make clean
+        make vendor/lahaina-qgki_defconfig
+        make -j$(nproc) CC="ccache clang" LD=ld.lld AR=llvm-ar
+        
+        mkdir -p ../output
+        cp arch/arm64/boot/Image.gz-dtb ../output/
+
+    - name: Package artifacts
+      run: |
+        cd output
+        zip -r kernel-$(date +%Y%m%d).zip *
+        
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: kernel-build
+        path: output/kernel-*.zip
