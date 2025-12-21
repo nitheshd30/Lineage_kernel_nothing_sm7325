@@ -20,7 +20,7 @@ jobs:
       - name: Clone Kernel Source
         run: |
           # Clones the specific branch for Nothing OS 3.0+ updates
-          git clone --depth=1 https://github.com/NothingOSS/android_kernel_msm-5.4_nothing_sm7325.git -b sm7325/v/mr kernel-source
+          git clone --depth=1 https://github.com/nitheshd30/Lineage_kernel_nothing_sm7325.git -b lineage-22.2 kernel-source
 
       - name: Setup Toolchain (AOSP Clang)
         run: |
