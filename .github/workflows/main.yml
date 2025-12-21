@@ -1,60 +1,72 @@
-name: Build Kernel
-
+name: Build Nothing Phone 1 Kernel (sm7325/v/mr)
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    name: Compile Kernel
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Workflow Repo
-        uses: actions/checkout@v3
+      - name: Maximize Build Space
+        uses: easimon/maximize-build-space@master
         with:
-          path: hostrepo  # avoid conflict with 'kernel' directory
-
-      - name: Clone Kernel Source
-        run: |
-          git clone --depth=1 -b lineage-22.2 https://github.com/LineageOS/android_kernel_nothing_sm7325 kernel
+          remove-dotnet: 'true'
+          remove-android: 'true'
 
       - name: Install Dependencies
         run: |
-          sudo apt update
-          sudo apt install -y bc bison build-essential curl flex git kmod \
-            libssl-dev libncurses5-dev libelf-dev python3 python3-pip unzip \
-            wget ccache rsync zip
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential flex git libssl-dev libelf-dev python3 libarchive-tools
 
-      - name: Clone Proton Clang
+      - name: Clone Kernel Source
         run: |
-          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
+          # Clones the specific branch for Nothing OS 3.0+ updates
+          git clone --depth=1 https://github.com/NothingOSS/android_kernel_msm-5.4_nothing_sm7325.git -b sm7325/v/mr kernel-source
 
-      - name: Set Up Environment Variables
+      - name: Setup Toolchain (AOSP Clang)
         run: |
-          echo "CLANG_PATH=${GITHUB_WORKSPACE}/clang/bin" >> $GITHUB_ENV
-          echo "KERNEL_DIR=${GITHUB_WORKSPACE}/kernel" >> $GITHUB_ENV
-          echo "OUT_DIR=${GITHUB_WORKSPACE}/kernel/out" >> $GITHUB_ENV
+          # Stable method: clone from main branch to avoid 404 archive errors
+          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 -b main $GITHUB_WORKSPACE/clang-aosp
+
+      - name: Setup KernelSU
+        working-directory: kernel-source
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
 
       - name: Build Kernel
+        working-directory: kernel-source
         run: |
+          # Locate the versioned clang directory dynamically
+          CLANG_DIR=$(find $GITHUB_WORKSPACE/clang-aosp -name "clang-r*" -type d | head -n 1)
+          export PATH=$CLANG_DIR/bin:$PATH
+          
+          # Environment variables for Snapdragon 778G+ (msm-5.4)
           export ARCH=arm64
-          export SUBARCH=arm64
-          export CLANG_TRIPLE=aarch64-linux-gnu-
-          export CROSS_COMPILE=${CLANG_PATH}/aarch64-linux-gnu-
-          export CROSS_COMPILE_COMPAT=${CLANG_PATH}/arm-linux-gnueabi-
-          export PATH=${CLANG_PATH}:${PATH}
+          export LLVM=1
+          export LLVM_IAS=1
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          
+          # Fix for "The base file .config does not exist":
+          # Qualcomm kernels often require the 'vendor/' prefix in the make command
+          make O=out vendor/lahaina_QGKI.config
+          
+          # Compile the image
+          make -j$(nproc --all) O=out CC=clang
 
-          cd $KERNEL_DIR
-          make O=out vendor/lahaina-qgki_defconfig
-          make -j$(nproc) O=out \
-            CC=clang \
-            CLANG_TRIPLE=$CLANG_TRIPLE \
-            CROSS_COMPILE=$CROSS_COMPILE \
-            CROSS_COMPILE_COMPAT=$CROSS_COMPILE_COMPAT \
-            LLVM=1 LLVM_IAS=1
+      - name: Package with AnyKernel3
+        run: |
+          git clone https://github.com/osm0sis/AnyKernel3.git
+          # Checks for the built image and copies it for zipping
+          if [ -f kernel-source/out/arch/arm64/boot/Image.gz ]; then
+            cp kernel-source/out/arch/arm64/boot/Image.gz AnyKernel3/
+          else
+            cp kernel-source/out/arch/arm64/boot/Image AnyKernel3/
+          fi
+          cd AnyKernel3
+          zip -r9 ../Nothing-sm7325-v-mr-Kernel.zip *
 
-      - name: Upload Kernel Image
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Image.gz-dtb
-          path: kernel/out/arch/arm64/boot/Image.gz-dtb
+          name: Nothing-Kernel-Zip
+          path: Nothing-sm7325-v-mr-Kernel.zip
