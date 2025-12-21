@@ -48,7 +48,7 @@ jobs:
           
           # Fix for "The base file .config does not exist":
           # Qualcomm kernels often require the 'vendor/' prefix in the make command
-          make O=out vendor/lahaina_QGKI.config
+          make O=out vendor/lahaina-qgki_defconfig
           
           # Compile the image
           make -j$(nproc --all) O=out CC=clang
